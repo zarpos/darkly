@@ -1,0 +1,26 @@
+# ── VM images ──────────────────────────────────────────────
+*.iso
+*.ova
+*.ovf
+*.vmdk
+*.vdi
+*.vhd
+*.vbox
+
+# ── Vagrant ────────────────────────────────────────────────
+.vagrant/
+
+# ── macOS ──────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverrideAttribute
+._*
+.Spotlight-V100
+.Trashes
+
+# ── Editors ────────────────────────────────────────────────
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

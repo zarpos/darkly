@@ -1,0 +1,12 @@
+Para esta flag he hecho lo que se conoce como directory traversal. En la anterior flag al inspeccionar el código fuente de la landing page descrubrí que había una url con un código MD5 que correspondía a la palabra "Albatross"
+
+Una vez me meto en la página veo esta url que contiene un "?page" eso significa que está ejecutando un script.
+
+A raíz de eso me pongo a investigar y descubro que generalmente las páginas se alojan en esta ruta /var/www/html/site/ por lo que continuo mi investigación y descubro de nuevo que el archivo /ect/passwd es el fichero por excelencia que buscan siempre en los ctfs para demostrar que tienen acceso a rutas que están fuera de la web.
+
+En cuanto empiezo a probar yéndome hacia atrás probando siempre así "../etc/passwd" descubro que al principio me decía la web un mensaje que ponía "wtf"
+
+Si continuo yendo cada vez un directorio más hacia atrás, poco a poco empiezan los mensajes de ánimo hasta que llega un punto en el que directamente te sale un pop up que te pone cuál es la flag.
+
+Quedando así la ruta:
+http://192.168.64.17/?page=../../../../../../../etc/passwd

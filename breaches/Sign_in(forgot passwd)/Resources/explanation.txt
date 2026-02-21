@@ -1,0 +1,9 @@
+Ahora que hemos salido de la flag de robots.txt vamos a ir a la parte de login que tiene la página web, probando a interactuar de normal con el form no se ve nada raro ni en la parte de red ni en los campos del formulario, tampoco veo nada raro en el código fuente de la página.
+
+Ya que hay un botón de "I forgot my password" vamos a meternos e inspeccionar el HTML del form.
+
+vemos esto en el form
+<input type="hidden" name="mail" value="webmaster@borntosec.com" maxlength="15">
+así que vamos a probar a hacer cambios en ese formulario como por ejemplo editar el correo por cualquier cosa a ver qué ocurre.
+
+con tan solo cambiar el correo ya me ha salido la flag

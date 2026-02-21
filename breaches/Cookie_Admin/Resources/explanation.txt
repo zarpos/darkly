@@ -1,0 +1,1 @@
+esta ha sido mucho más sencilla de lo que me esperaba, después de estar probando con lo del feedback a ver cuál era la lógica, me puse con lo de inspeccionar elemento a buscar cosas hasta que vi una cookie que ponía I_Am_Admin y venía con un código MD5 que se traducía a false, lo cambié a true desde la consola y me devolvió la flag

@@ -1,0 +1,5 @@
+Para esta vulnerabilidad nos basamos en los estándares de OWASP así que investigamos el código fuente del form para ver que no tiene ningún retry de tiempo ni un captcha ni nada por el estilo que pueda interferir.
+
+Al ver que no tenemos limitación procedemos a usar THC Hydra que es una herramienta de la terminal para romer forms y usamos el diccionario de rockyou.txt que es un estandar de direcciones.
+
+A base de probar llegamos a que la contraseña "shadow" es la que nos devuelve el flag

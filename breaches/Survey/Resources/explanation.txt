@@ -1,0 +1,7 @@
+para esta flag hemos estado toqueteando con la sección de survey, como ya es habitual hemos empezado directamente a revisar el código fuente y las interacciones de la página.
+
+Al votar vemos en la pestaña network una actividad a ?survey por lo que vamos a probar a desbordar ese número a ver si tienen validación de parámetros.
+
+La web puedes votar desde el 1 hasta el 10, la cosa es que si en network tu le das a "copy as fetch" desde ahí puedes ver el request http que se ha mandado y modificarlo a tu gusto pudiendo poner números tan grandes como 100.
+
+Al pasarle un número grande, en este caso 100, desborda directamente y en la preview puedes ver la flag.

@@ -1,0 +1,128 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# ─────────────────────────────────────────────────────────────
+#  Darkly – BornToSec Web Security Challenge
+#  Vagrant configuration for VirtualBox (Linux correction)
+#
+#  Requirements:
+#    - VirtualBox installed
+#    - Vagrant installed
+#    - Darkly_i386.iso placed in this same directory (setup/)
+#
+#  Usage:
+#    vagrant up      → creates and boots the Darkly VM
+#    vagrant halt    → shuts down the VM
+#    vagrant destroy → removes the VM entirely
+# ─────────────────────────────────────────────────────────────
+
+ISO_NAME  = "Darkly_i386.iso"
+VM_NAME   = "Darkly_BornToSec"
+DUMMY_BOX = "darkly-dummy"
+VM_IP     = "172.16.60.128"
+
+iso_path = File.expand_path(ISO_NAME, __dir__)
+
+# ── Pre-flight: ISO must exist ───────────────────────────────
+unless File.exist?(iso_path)
+  abort <<~MSG
+
+    \e[31m[ERROR]\e[0m #{ISO_NAME} not found.
+    Please download it from the 42 intra and place it here:
+      #{iso_path}
+
+  MSG
+end
+
+# ── Bootstrap: create a local dummy box if needed ───────────
+#
+#  Vagrant requires a "box" to know which provider to use.
+#  Since Darkly boots entirely from the ISO, we create a
+#  minimal dummy box (just a provider metadata file) so
+#  Vagrant is satisfied without downloading anything extra.
+#
+unless system("vagrant box list 2>/dev/null | grep -q '#{DUMMY_BOX}'",
+              out: File::NULL, err: File::NULL)
+  puts "\e[33m[setup]\e[0m Registering local dummy box '#{DUMMY_BOX}'..."
+  require "tmpdir"
+  Dir.mktmpdir do |tmp|
+    File.write("#{tmp}/metadata.json", '{"provider":"virtualbox"}')
+    system("cd #{tmp} && tar czf dummy.box metadata.json", out: File::NULL)
+    unless system("vagrant box add --name #{DUMMY_BOX} #{tmp}/dummy.box --force",
+                  out: File::NULL)
+      abort "\e[31m[ERROR]\e[0m Could not register dummy Vagrant box."
+    end
+  end
+  puts "\e[32m[setup]\e[0m Dummy box ready."
+end
+
+# ── Vagrant configuration ────────────────────────────────────
+Vagrant.configure("2") do |config|
+
+  config.vm.box         = DUMMY_BOX
+
+  # Darkly is a live system — no SSH agent needed
+  config.vm.communicator = "none"
+  config.ssh.insert_key  = false
+
+  # Host-only network so the host can reach the VM at VM_IP.
+  # auto_config: false → Vagrant won't try to reconfigure the
+  # guest's network (the live ISO manages its own IP).
+  config.vm.network "private_network", ip: VM_IP, auto_config: false
+
+  config.vm.provider "virtualbox" do |vb|
+
+    vb.name   = VM_NAME
+    vb.memory = 1024
+    vb.cpus   = 1
+
+    # Show the VM window — the corrector can watch it boot
+    # and see the IP printed on screen.
+    vb.gui = true
+
+    # Mark this as a 32-bit Debian system (matches the ISO)
+    vb.customize ["modifyvm", :id, "--ostype", "Debian"]
+
+    # ── Storage ───────────────────────────────────────────
+    # Remove any default storage controller the dummy box may
+    # have brought along (ignore errors if it doesn't exist).
+    vb.customize ["storagectl", :id,
+                  "--name", "SATA Controller", "--remove"] rescue nil
+
+    # Add a fresh IDE controller and attach the ISO as a DVD
+    vb.customize ["storagectl", :id,
+                  "--name", "IDE Controller",
+                  "--add", "ide", "--controller", "PIIX4"]
+    vb.customize ["storageattach", :id,
+                  "--storagectl", "IDE Controller",
+                  "--port", "0", "--device", "0",
+                  "--type", "dvddrive",
+                  "--medium", iso_path]
+
+    # ── Boot order ────────────────────────────────────────
+    vb.customize ["modifyvm", :id,
+                  "--boot1", "dvd",
+                  "--boot2", "none",
+                  "--boot3", "none",
+                  "--boot4", "none"]
+
+    # ── Misc optimisations ────────────────────────────────
+    vb.customize ["modifyvm", :id, "--usb",   "off"]
+    vb.customize ["modifyvm", :id, "--audio", "none"]
+
+  end
+
+  # ── Post-up message ──────────────────────────────────────
+  config.vm.post_up_message = <<~MSG
+
+    \e[32m✔ Darkly VM is running!\e[0m
+    Open your browser and navigate to:
+
+        http://#{VM_IP}
+
+    To stop the VM:   vagrant halt
+    To destroy it:    vagrant destroy
+
+  MSG
+
+end

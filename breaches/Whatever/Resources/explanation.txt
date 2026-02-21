@@ -1,0 +1,13 @@
+Para esta penúltima flag vamos a usar el archivo que nos dio la ruta "Whatever" cuando hicimos la parte de robots.txt.
+
+
+Nos devolvió esto
+root:437394baff5aa33daa618be47b75cb49
+El cual tiene un MD5 que si lo descifras se traduce a "qwerty123@"
+
+entonces lo que hacemos es en la web irnos a /admin como si fuese un wordpress e iniciamos sesión con:
+
+User: root
+Passwd: qwerty123@
+
+y ya nos da la flag.

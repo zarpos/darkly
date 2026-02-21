@@ -1,0 +1,6 @@
+En este caso, esta ha sido mi segunda flag y lo único que he hecho es irme hasta abajo del todo que puedes dejar un feedback y con tan solo poner esto
+
+Name: a
+Message: a
+
+ya me ha salido la flag, lo curioso es que he seguido haciendo pruebas con el feedback y solo sale cuando pones "a" con el resto si que funciona normal. También te la dan si copias y pegas el comentario de ejemplo que hay

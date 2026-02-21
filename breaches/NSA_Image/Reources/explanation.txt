@@ -1,0 +1,38 @@
+Para esta flag al interactuar con las imágenes que hay en la landing no cargaban mediante una ruta estática sino mediante un script
+
+?page=media&src=nsa
+
+Si el servidor no sanitiza la entrada en el parámetro src, podemos engañar al servidor para que cargue nuestro código en vez de una imagen y así inyectar código nosotros.
+
+Esta vulnerabilidad se llama Reflected XSS (Cross-Site Scripting Reflejado) mediante Data URI Scheme.
+
+Se forjó una URL inyectando un payload de JavaScript codificado en Base64 utilizando el esquema Data URI (data:text/html;base64,...). Al procesar la solicitud, el navegador de la víctima interpreta el Base64 como un documento HTML válido y ejecuta el código malicioso.
+
+Mitigación: Validar que el parámetro src solo contenga caracteres alfanuméricos y corresponda a un archivo existente en el servidor. Rechazar explícitamente esquemas como data:, javascript: o vbscript:.
+
+convertimos este script
+<script>alert("xss")</script>
+
+lo codificamos a base64 y lo parametrizamos en la url así
+http://192.168.64.17/index.php?page=media&src=data:text/html;base64,PHNjcmlwdD5hbGVydCgieHNzIik8L3NjcmlwdD4=
+
+El script se llama Data URI Wrapper, los desarrolladores lo usaban para incrustar imágenes en el HTML sin tener que cargar un archivo externo, pero nosotros lo podemos usar para meter scripts. Así de desglosa
+
+Aquí tienes el desglose exacto de lo que le estás diciendo al navegador, pieza por pieza:
+
+data: -> Es el "protocolo". Igual que http:// le dice al navegador "ve a internet a buscar esto", data: le dice "no vayas a ningún lado, el archivo que buscas te lo voy a dar yo aquí mismo a continuación".
+
+text/html -> Es el "MIME type". El servidor web de Darkly esperaba que el archivo fuera una imagen de la NSA (tipo image/jpeg). Al poner text/html, le estás diciendo a tu navegador: "Olvida la imagen, trágate esto como si fuera una página web completa".
+
+;base64 -> Le indica al navegador cómo está escrito el archivo. Usamos Base64 porque en las URLs no puedes poner caracteres raros como < o > (romperían el enlace). Base64 convierte cualquier cosa en letras y números inofensivos.
+
+PHNjcmlwdD5hbGVydCgieHNzIik8L3NjcmlwdD4= -> Este es el Payload (la carga explosiva). Es literalmente el código <script>alert("xss")</script> traducido a Base64.
+
+3. El resumen de lo que ocurre (La cadena de eventos)
+Tú le pasas esa URL manipulada al servidor.
+
+El servidor, en lugar de comprobar si le estás pidiendo la foto de la NSA, coge ese texto ciegamente y se lo manda de vuelta a tu navegador.
+
+Tu navegador recibe el data:text/html, se da cuenta de que tiene que renderizar una página web "incrustada", decodifica el Base64 y... ¡BAM! Ejecuta el JavaScript de la alerta.
+
+El sistema de evaluación de la máquina detecta que has logrado ejecutar código en ese parámetro y te recompensa imprimiendo la flag.

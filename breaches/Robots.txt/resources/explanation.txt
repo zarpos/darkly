@@ -1,0 +1,48 @@
+Para esta vulnerabilidad vamos a un básico de los CTFs, normalmente cuando te dan una máquina a romper te suelen poner un archivo a mirar en la ruta que suele ser IP/robots.txt y ahí te dan una pista de dónde no quieren que mires, que precisamente es donde hay que mirar.
+
+
+cuando accedemos a la ruta vemos que nos devuelve esto
+User-agent: *
+Disallow: /whatever
+Disallow: /.hidden
+
+si me meto en la ruta de whatever hay únicamente un archivo con la parte del root
+
+root:437394baff5aa33daa618be47b75cb49
+
+que el MD5 corresponde a "qwerty123@"
+
+
+
+Si vamos a la ruta de ./hidden vemos de primeras un directorio bastante largo con muchas rutas.
+Vemos de todos los directorios con nombres raros uno que se llama README el cual contiene este archivo
+
+Tu veux de l'aide ? Moi aussi !
+Traducido al español es: ¿Quieres ayuda? ¡Yo también!
+
+como la flag tiene que ser o estar en un readme, vamos a usar este comando para navegar por todas esas carpetas:
+
+wget -r -l 0 -np -nd -A "README" http://[IP]/.hidden/
+
+esto significa las flags del comando
+-r: Recursive. Entra en cada subdirectorio.
+
+-l 0: Level. Sin límite de profundidad (el laberinto tiene 3 niveles).
+
+-np: No Parent. No sube a directorios superiores para no descargar toda la web.
+
+-nd: No Directories. Descarga todos los archivos en la misma carpeta local (así no tienes que navegar por 2000 carpetas en tu PC).
+
+-A "README": Accept. Solo descarga los archivos que se llamen exactamente así.
+
+
+
+Ahora que ya tenemos los readmes, vamos a filtrar por el archivo ese del readme original, hacemos un grep para buscar las coincidencias de esa cadena de texto
+
+grep -vE "Moi aussi|Toujours pas|Tu veux de l'aide|Non plus" README*
+
+
+ahora con este comando buscamos el readme concreto
+
+find 192.168.64.17 -name "README" -exec cat {} + | grep -vE "Moi aussi|Toujours pas|Tu veux de l'aide|Non plus|voisin|toujours pas"
+

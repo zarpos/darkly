@@ -1,0 +1,26 @@
+Para esta vulnerabilidad, en la página de Albatros si nos vamos al código fuente vemos que al final del todo hay muchísimas líneas en blanco y empiezas a encontrarte comentarios como estos
+
+You must come from : "https://www.nsa.gov/".
+
+Let's use this browser : "ft_bornToSec". It will help you a lot.
+
+
+Eso lo que nos está diciendo es que tenemos que hacer una petición para la que usaremos curl desde la terminal y emularemos los parámetros de navegador (User-Agent) y el Refer para la cabecera HTTP. El endpoint será la URL del albatros.
+
+curl -A "ft_bornToSec" -e "https://www.nsa.gov/" "http://192.168.64.17/index.php?page=b7e44c7a40c5f80139f0a50f3650fb2bd8d00b0d24667c4c2ca32c88e13b758f" | grep -i flag
+
+curl (Client URL):
+
+
+-A "ft_bornToSec" (User-Agent):
+La bandera -A (o --user-agent) sobrescribe la cabecera HTTP User-Agent. Por defecto, curl enviaría algo como curl/7.68.0. Al cambiarlo a ft_bornToSec, engañamos al servidor haciéndole creer que estamos utilizando el navegador corporativo o específico.
+
+-e "https://www.nsa.gov/" (Referer):
+La bandera -e (o --referer) inyecta la cabecera HTTP Referer. Esta cabecera sirve normalmente para decirle al servidor web desde qué enlace o página venimos rebotados. El código fuente exigía venir de la NSA, así que con este parámetro falsificamos nuestro origen.
+
+"http://192.168.64.17/... (Target URL):
+Es el endpoint o destino de nuestro ataque. Es la URL exacta de la página del copyright (o del albatros) donde reside la lógica vulnerable en el lado del servidor (PHP) que evalúa las cabeceras.
+
+
+grep -i flag (Filtro de búsqueda):
+grep es una herramienta para buscar patrones de texto. La bandera -i le dice que ignore mayúsculas y minúsculas (case-insensitive). Su función aquí es limpiar el ruido: lee todo el HTML que le pasó el comando curl y solo imprime en tu pantalla la línea exacta que contiene la palabra "flag".

@@ -1,0 +1,13 @@
+Para empezar con esta flag he realizado la prueba más básica que existe, he querido subir un archivo de php llamado "image.php" el archivo solo tiene una letra "a" por lo que pesa muy poquito, 2 bytes para ser exactos.
+
+
+Al intentar subirlo me da error y dice "your image was not uploaded" sin embargo en vez de darme por vencido, pruebo a añadir la extensión jpg y me queda así "image.php.jpg" y ahí ya si que se sube dando este mensaje:
+/tmp/image.php.jpg succesfully uploaded.
+
+Al descubrir eso, significa que el servidor es un poco "vago" ya que solo confirma la extensión final del archivo, por eso puedes poner cualquier cosa que si al final del todo le añades la extensión de jpeg te va a dar una respuesta correcta el servidor.
+
+Sabiendo eso lo que hacemos es copiar la petición post que se hace y ahí tienes dos parámetros
+	. File-name: esto lo cambiamos por test.php
+	. Content-type: esto es jpeg/image y lo vamos a dejar igual
+
+De esta manera lo que estamos haciendo es ver que le podemos mandar un archivo de php pero falseando el content type para que se piense que es una imagen y así nos da la flag

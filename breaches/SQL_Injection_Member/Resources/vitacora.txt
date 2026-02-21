@@ -1,0 +1,30 @@
+en la web inicial, yéndome a members descubrí que podías hacer consultas SQL. Haciendo la básica de 1 = 1 OR 1
+descubrí que devolvía varios usuarios y uno de ellos se llamaba get the flag, por lo que empecé a hacer consultas sql como por ejemplo esta 1 union select 1,2
+con esa última fui probando combinaciones hasta llegar al punto en el que ves que tiene solo dos columnas. 
+
+Una vez sabes que hay dos columnas, empiezo a intentar sacar las tablas que tiene 1 UNION SELECT table_name, 2 FROM information_schema.tables usando ese comando lo cual no permite acceder a information_schema.tables que es como un diccionario interno.
+
+Aquí de momento es la primera flag que estoy descubriendo pero veo tablas interesantes como:
+ - Users
+ - Guestbook
+ - Vote_dbs
+
+ De momento voy a empezar por Users. 1 UNION SELECT column_name, 2 FROM information_schema.columns WHERE table_name = 'users'
+
+ Llevo un rato peleándome con la syntaxis ya que la BBDD como medida de seguridad te añade un "\"" antes de cada caracter especial para evitar SQLi, por lo que he probado a traducir la palabra users a hexadecimal y se me queda así la consulta
+ 1 UNION SELECT column_name, 2 FROM information_schema.columns WHERE table_name = 0x7573657273
+ lo mejor es que funciona ;)
+
+ de toda la lista de usuarios veo dos que me llaman la atención. Commentaire y countersign por lo que voy a mirar su contenido directamente con esta query
+ 1 UNION SELECT Commentaire, countersign FROM users
+
+ vemos un usuario con esta info la cual es la clave:
+
+ ID: 1 UNION SELECT Commentaire, countersign FROM users
+First name: Decrypt this password -> then lower all the char. Sh256 on it and it's good !
+Surname : 5ff9d0165b4f92b14994e5c685cdce28
+
+Que tenemos que hacer como paso final? usar ese código de 32 bits para transformarlo en una palabra (Usando MD5) y luego hacer lo que nos dicen, volver a sacar un hash con SHA256 y esa si que sería la clave del flag final.
+
+MD5: FortyTwo (Importante que hay que ponerla en minúsculas para sacar bien el hash como nos dice el user)
+SHA256: 10a16d834f9b1e4068b25c4c46fe0284e99e44dceaf08098fc83925ba6310ff5

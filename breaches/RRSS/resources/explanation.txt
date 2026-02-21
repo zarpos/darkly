@@ -1,0 +1,5 @@
+Cuando te pones a investigar el footer de la página a parte de lo del albatros que tienes ahí, tienes la sección de RRSS, en la cual si te fijas bien, en vez de tener los enlaces directamente a las redes sociales. Tienes un redirect que hace como intermediario. Esto pone.
+
+index.php?page=redirect&site=facebook
+
+Para esta lo que haces es un ataque de validación de redireccionamineto, en el que si el parámetro site del endpoint ?page=redirect lo cambias por cualquier url te salta directamente la flag.
