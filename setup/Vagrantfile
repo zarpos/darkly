@@ -19,7 +19,7 @@
 ISO_NAME  = "Darkly_i386.iso"
 VM_NAME   = "Darkly_BornToSec"
 DUMMY_BOX = "darkly-dummy"
-VM_IP     = "172.16.60.128"
+VM_IP     = "192.168.56.128"
 
 iso_path = File.expand_path(ISO_NAME, __dir__)
 
@@ -35,39 +35,46 @@ unless File.exist?(iso_path)
 end
 
 # ── Bootstrap: create a local dummy box if needed ───────────
-#
-#  Vagrant requires a "box" to know which provider to use.
-#  Since Darkly boots entirely from the ISO, we create a
-#  minimal dummy box (just a provider metadata file) so
-#  Vagrant is satisfied without downloading anything extra.
-#
-unless system("vagrant box list 2>/dev/null | grep -q '#{DUMMY_BOX}'",
-              out: File::NULL, err: File::NULL)
+unless ENV['DARKLY_BOX_CREATED'] == 'true' || `vagrant box list`.include?(DUMMY_BOX)
+  ENV['DARKLY_BOX_CREATED'] = 'true'
+
   puts "\e[33m[setup]\e[0m Registering local dummy box '#{DUMMY_BOX}'..."
   require "tmpdir"
+
   Dir.mktmpdir do |tmp|
     File.write("#{tmp}/metadata.json", '{"provider":"virtualbox"}')
-    system("cd #{tmp} && tar czf dummy.box metadata.json", out: File::NULL)
-    unless system("vagrant box add --name #{DUMMY_BOX} #{tmp}/dummy.box --force",
-                  out: File::NULL)
-      abort "\e[31m[ERROR]\e[0m Could not register dummy Vagrant box."
+
+    File.write("#{tmp}/box.ovf", <<~OVF)
+      <?xml version="1.0"?>
+      <Envelope ovf:version="1.0" xml:lang="en-US"
+        xmlns="http://schemas.dmtf.org/ovf/envelope/1"
+        xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1">
+        <VirtualSystem ovf:id="vm">
+          <Info>A minimal VM</Info>
+        </VirtualSystem>
+      </Envelope>
+    OVF
+
+    Dir.chdir(tmp) do
+      system("tar", "czf", "dummy.box", "metadata.json", "box.ovf")
+    end
+
+    if File.exist?("#{tmp}/dummy.box")
+      system("vagrant", "box", "add", "--name", DUMMY_BOX, "#{tmp}/dummy.box", "--force")
+      puts "\e[32m[setup]\e[0m Dummy box ready."
+    else
+      abort "\e[31m[ERROR]\e[0m Could not create dummy box file."
     end
   end
-  puts "\e[32m[setup]\e[0m Dummy box ready."
 end
 
 # ── Vagrant configuration ────────────────────────────────────
 Vagrant.configure("2") do |config|
 
-  config.vm.box         = DUMMY_BOX
-
-  # Darkly is a live system — no SSH agent needed
-  config.vm.communicator = "none"
+  config.vm.box          = DUMMY_BOX
+  config.vm.communicator = :none
+  config.vm.boot_timeout = 0
   config.ssh.insert_key  = false
-
-  # Host-only network so the host can reach the VM at VM_IP.
-  # auto_config: false → Vagrant won't try to reconfigure the
-  # guest's network (the live ISO manages its own IP).
   config.vm.network "private_network", ip: VM_IP, auto_config: false
 
   config.vm.provider "virtualbox" do |vb|
@@ -75,24 +82,20 @@ Vagrant.configure("2") do |config|
     vb.name   = VM_NAME
     vb.memory = 1024
     vb.cpus   = 1
+    vb.gui    = true
 
-    # Show the VM window — the corrector can watch it boot
-    # and see the IP printed on screen.
-    vb.gui = true
-
-    # Mark this as a 32-bit Debian system (matches the ISO)
-    vb.customize ["modifyvm", :id, "--ostype", "Debian"]
+    vb.customize ["modifyvm", :id, "--ostype",            "Debian"]
+    vb.customize ["modifyvm", :id, "--pae",               "on"]
+    vb.customize ["modifyvm", :id, "--vram",              "16"]
+    vb.customize ["modifyvm", :id, "--graphicscontroller","vboxvga"]
+    vb.customize ["modifyvm", :id, "--firmware",          "bios"]
+    vb.customize ["modifyvm", :id, "--accelerate3d",      "off"]
 
     # ── Storage ───────────────────────────────────────────
-    # Remove any default storage controller the dummy box may
-    # have brought along (ignore errors if it doesn't exist).
-    vb.customize ["storagectl", :id,
-                  "--name", "SATA Controller", "--remove"] rescue nil
-
-    # Add a fresh IDE controller and attach the ISO as a DVD
     vb.customize ["storagectl", :id,
                   "--name", "IDE Controller",
-                  "--add", "ide", "--controller", "PIIX4"]
+                  "--add", "ide",
+                  "--controller", "PIIX4"]
     vb.customize ["storageattach", :id,
                   "--storagectl", "IDE Controller",
                   "--port", "0", "--device", "0",
@@ -112,7 +115,6 @@ Vagrant.configure("2") do |config|
 
   end
 
-  # ── Post-up message ──────────────────────────────────────
   config.vm.post_up_message = <<~MSG
 
     \e[32m✔ Darkly VM is running!\e[0m
