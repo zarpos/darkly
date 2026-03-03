@@ -1,99 +1,83 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
 #  Darkly – BornToSec Web Security Challenge
-#  Launch script (no Vagrant required — uses VBoxManage only)
-#
 #  Usage:
-#    bash launch.sh          → creates and boots the VM
-#    bash launch.sh stop     → shuts down the VM
-#    bash launch.sh destroy  → removes the VM completely
+#    bash launch.sh          → crea y arranca la VM
+#    bash launch.sh stop     → apaga la VM
+#    bash launch.sh destroy  → elimina la VM completamente
 # ─────────────────────────────────────────────────────────────
 
-set -e
-
 VM_NAME="Darkly_BornToSec"
-VM_IP="172.16.60.128"
-ISO_NAME="Darkly_i386.iso"
+RAM=2048
+CPUS=2
 HOST_NET="vboxnet0"
 HOST_NET_IP="172.16.60.1"
 HOST_NET_MASK="255.255.255.0"
+VM_IP="172.16.60.128"
 
-# Resolve ISO path relative to the script's own directory
+# Detectar la ISO automáticamente en la carpeta del script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ISO_PATH="$SCRIPT_DIR/$ISO_NAME"
+ISO_PATH="$(find "$SCRIPT_DIR" -maxdepth 1 -name "*.iso" | head -n 1)"
 
-# ── Colours ──────────────────────────────────────────────────
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+# ── Colores ───────────────────────────────────────────────────
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[✔]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[!]${NC} $*"; }
 error() { echo -e "${RED}[✘]${NC} $*"; exit 1; }
 
-# ── Helper: check VBoxManage is available ────────────────────
-check_deps() {
-  command -v VBoxManage &>/dev/null || \
-    error "VBoxManage not found. Please install VirtualBox first."
-}
+command -v VBoxManage &>/dev/null || error "VBoxManage no encontrado. Instala VirtualBox primero."
 
-# ── Stop the VM ───────────────────────────────────────────────
+# ── Stop ─────────────────────────────────────────────────────
 stop_vm() {
   if VBoxManage list runningvms | grep -q "\"$VM_NAME\""; then
-    warn "Stopping $VM_NAME..."
+    warn "Apagando $VM_NAME..."
     VBoxManage controlvm "$VM_NAME" acpipowerbutton 2>/dev/null || \
       VBoxManage controlvm "$VM_NAME" poweroff
-    info "VM stopped."
+    info "VM apagada."
   else
-    warn "VM '$VM_NAME' is not running."
+    warn "La VM '$VM_NAME' no está corriendo."
   fi
 }
 
-# ── Destroy the VM ────────────────────────────────────────────
+# ── Destroy ───────────────────────────────────────────────────
 destroy_vm() {
   stop_vm 2>/dev/null || true
   if VBoxManage list vms | grep -q "\"$VM_NAME\""; then
-    warn "Destroying VM '$VM_NAME'..."
+    warn "Eliminando VM '$VM_NAME'..."
     VBoxManage unregistervm "$VM_NAME" --delete
-    info "VM destroyed."
+    info "VM eliminada."
   else
-    warn "No VM named '$VM_NAME' found."
+    warn "No existe ninguna VM llamada '$VM_NAME'."
   fi
 }
 
-# ── Create and start the VM ───────────────────────────────────
+# ── Start ─────────────────────────────────────────────────────
 start_vm() {
-  # Pre-flight: ISO must exist
-  [[ -f "$ISO_PATH" ]] || \
-    error "$ISO_NAME not found.\n  Expected: $ISO_PATH\n  Download it from the 42 intra and place it in this directory."
+  [[ -n "$ISO_PATH" ]] || error "No se encontró ningún .iso en $SCRIPT_DIR"
+  info "ISO detectada: $ISO_PATH"
 
-  # If a VM with this name already exists, just start it
+  # Si ya existe la VM, simplemente arrancarla
   if VBoxManage list vms | grep -q "\"$VM_NAME\""; then
-    warn "VM '$VM_NAME' already exists — starting it."
-    VBoxManage startvm "$VM_NAME" --type headless 2>/dev/null || \
-      VBoxManage startvm "$VM_NAME"
-    info "VM started → http://$VM_IP"
+    warn "La VM '$VM_NAME' ya existe — arrancando..."
+    VBoxManage startvm "$VM_NAME" --type gui
+    info "VM arrancada → http://$VM_IP"
     return
   fi
 
-  info "Creating VM: $VM_NAME"
+  info "Creando VM: $VM_NAME (RAM: ${RAM}MB, CPUs: $CPUS)"
 
-  # ── Create the VM ──────────────────────────────────────────
-  VBoxManage createvm \
-    --name "$VM_NAME" \
-    --ostype "Debian" \
-    --register
+  VBoxManage createvm --name "$VM_NAME" --ostype "Debian" --register
 
-  # ── Basic settings ─────────────────────────────────────────
   VBoxManage modifyvm "$VM_NAME" \
-    --memory 1024 \
-    --cpus 1 \
+    --memory "$RAM" \
+    --cpus "$CPUS" \
     --boot1 dvd --boot2 none --boot3 none --boot4 none \
     --usb off \
     --audio none
 
-  # ── Storage: IDE controller + ISO as DVD ───────────────────
+  # Controlador IDE + ISO como DVD
   VBoxManage storagectl "$VM_NAME" \
-    --name "IDE Controller" \
-    --add ide \
-    --controller PIIX4
+    --name "IDE Controller" --add ide --controller PIIX4
 
   VBoxManage storageattach "$VM_NAME" \
     --storagectl "IDE Controller" \
@@ -101,36 +85,30 @@ start_vm() {
     --type dvddrive \
     --medium "$ISO_PATH"
 
-  # ── Host-only network ──────────────────────────────────────
-  # Create vboxnet0 in 172.16.60.0/24 if it doesn't exist
-  if ! VBoxManage list hostonlyifs | grep -q "^Name: *$HOST_NET$"; then
-    info "Creating host-only interface $HOST_NET..."
+  # Red host-only
+  if ! VBoxManage list hostonlyifs | grep -q "^Name: *${HOST_NET}$"; then
+    info "Creando interfaz host-only $HOST_NET..."
     VBoxManage hostonlyif create
   fi
 
   VBoxManage hostonlyif ipconfig "$HOST_NET" \
-    --ip "$HOST_NET_IP" \
-    --netmask "$HOST_NET_MASK"
+    --ip "$HOST_NET_IP" --netmask "$HOST_NET_MASK"
 
   VBoxManage modifyvm "$VM_NAME" \
-    --nic1 hostonly \
-    --hostonlyadapter1 "$HOST_NET"
+    --nic1 hostonly --hostonlyadapter1 "$HOST_NET"
 
-  # ── Start the VM ───────────────────────────────────────────
-  info "Booting VM (a window will open)..."
-  VBoxManage startvm "$VM_NAME"
+  info "Arrancando VM (se abrirá una ventana)..."
+  VBoxManage startvm "$VM_NAME" --type gui
 
   echo
-  echo -e "${GREEN}✔ Darkly VM is running!${NC}"
-  echo -e "  Open your browser: http://$VM_IP"
+  echo -e "${GREEN}✔ Darkly VM corriendo!${NC}"
+  echo -e "  Abre tu navegador: http://$VM_IP"
   echo
-  echo -e "  Stop:    bash launch.sh stop"
-  echo -e "  Destroy: bash launch.sh destroy"
+  echo -e "  Parar:   bash launch.sh stop"
+  echo -e "  Borrar:  bash launch.sh destroy"
 }
 
 # ── Entry point ───────────────────────────────────────────────
-check_deps
-
 case "${1:-}" in
   stop)    stop_vm    ;;
   destroy) destroy_vm ;;

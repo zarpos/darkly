@@ -3,127 +3,97 @@
 
 # ─────────────────────────────────────────────────────────────
 #  Darkly – BornToSec Web Security Challenge
-#  Vagrant configuration for VirtualBox (Linux correction)
 #
-#  Requirements:
-#    - VirtualBox installed
-#    - Vagrant installed
-#    - Darkly_i386.iso placed in this same directory (setup/)
+#  Requisitos:
+#    - VirtualBox instalado
+#    - Vagrant instalado
+#    - Darkly_*.iso en esta misma carpeta (setup/)
 #
-#  Usage:
-#    vagrant up      → creates and boots the Darkly VM
-#    vagrant halt    → shuts down the VM
-#    vagrant destroy → removes the VM entirely
+#  Uso:
+#    vagrant up      → crea y arranca la VM
+#    vagrant halt    → apaga la VM
+#    vagrant destroy → elimina la VM
 # ─────────────────────────────────────────────────────────────
 
-ISO_NAME  = "Darkly_i386.iso"
 VM_NAME   = "Darkly_BornToSec"
 DUMMY_BOX = "darkly-dummy"
 VM_IP     = "192.168.56.128"
 
-iso_path = File.expand_path(ISO_NAME, __dir__)
+# ── Detectar la ISO automáticamente ─────────────────────────
+iso_path = Dir.glob(File.join(__dir__, "*.iso")).first
+abort "\e[31m[ERROR]\e[0m No se encontró ningún .iso en #{__dir__}" unless iso_path
+puts "\e[32m[info]\e[0m ISO detectada: #{iso_path}"
 
-# ── Pre-flight: ISO must exist ───────────────────────────────
-unless File.exist?(iso_path)
-  abort <<~MSG
-
-    \e[31m[ERROR]\e[0m #{ISO_NAME} not found.
-    Please download it from the 42 intra and place it here:
-      #{iso_path}
-
-  MSG
-end
-
-# ── Bootstrap: create a local dummy box if needed ───────────
-unless ENV['DARKLY_BOX_CREATED'] == 'true' || `vagrant box list`.include?(DUMMY_BOX)
-  ENV['DARKLY_BOX_CREATED'] = 'true'
-
-  puts "\e[33m[setup]\e[0m Registering local dummy box '#{DUMMY_BOX}'..."
+# ── Crear dummy box si no existe ─────────────────────────────
+unless `vagrant box list 2>/dev/null`.include?(DUMMY_BOX)
+  puts "\e[33m[setup]\e[0m Creando dummy box '#{DUMMY_BOX}'..."
   require "tmpdir"
-
   Dir.mktmpdir do |tmp|
     File.write("#{tmp}/metadata.json", '{"provider":"virtualbox"}')
-
-    File.write("#{tmp}/box.ovf", <<~OVF)
-      <?xml version="1.0"?>
-      <Envelope ovf:version="1.0" xml:lang="en-US"
-        xmlns="http://schemas.dmtf.org/ovf/envelope/1"
-        xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1">
-        <VirtualSystem ovf:id="vm">
-          <Info>A minimal VM</Info>
-        </VirtualSystem>
-      </Envelope>
-    OVF
-
-    Dir.chdir(tmp) do
-      system("tar", "czf", "dummy.box", "metadata.json", "box.ovf")
-    end
-
-    if File.exist?("#{tmp}/dummy.box")
-      system("vagrant", "box", "add", "--name", DUMMY_BOX, "#{tmp}/dummy.box", "--force")
-      puts "\e[32m[setup]\e[0m Dummy box ready."
-    else
-      abort "\e[31m[ERROR]\e[0m Could not create dummy box file."
-    end
+    File.write("#{tmp}/Vagrantfile",   'Vagrant.configure("2") { |c| }')
+    Dir.chdir(tmp) { system("tar czf dummy.box metadata.json Vagrantfile") }
+    system("vagrant box add --name #{DUMMY_BOX} #{tmp}/dummy.box --force") ||
+      abort("\e[31m[ERROR]\e[0m No se pudo crear el dummy box.")
   end
+  puts "\e[32m[setup]\e[0m Dummy box listo."
 end
 
-# ── Vagrant configuration ────────────────────────────────────
+# ── Configuración Vagrant ─────────────────────────────────────
 Vagrant.configure("2") do |config|
 
-  config.vm.box          = DUMMY_BOX
-  config.vm.communicator = :none
-  config.vm.boot_timeout = 0
-  config.ssh.insert_key  = false
-  config.vm.network "private_network", ip: VM_IP, auto_config: false
+  config.vm.box           = DUMMY_BOX
+  config.vm.communicator  = :none   # sin SSH, es una ISO "live"
+  config.vm.boot_timeout  = -1      # sin timeout de boot
+  config.ssh.insert_key   = false
 
   config.vm.provider "virtualbox" do |vb|
-
     vb.name   = VM_NAME
-    vb.memory = 1024
-    vb.cpus   = 1
-    vb.gui    = true
+    vb.memory = 2048
+    vb.cpus   = 2
+    vb.gui    = true   # abre ventana gráfica automáticamente
 
-    vb.customize ["modifyvm", :id, "--ostype",            "Debian"]
-    vb.customize ["modifyvm", :id, "--pae",               "on"]
-    vb.customize ["modifyvm", :id, "--vram",              "16"]
-    vb.customize ["modifyvm", :id, "--graphicscontroller","vboxvga"]
-    vb.customize ["modifyvm", :id, "--firmware",          "bios"]
-    vb.customize ["modifyvm", :id, "--accelerate3d",      "off"]
+    # Sistema operativo y gráficos
+    vb.customize ["modifyvm", :id, "--ostype",             "Debian"]
+    vb.customize ["modifyvm", :id, "--firmware",           "bios"]
+    vb.customize ["modifyvm", :id, "--pae",                "on"]
+    vb.customize ["modifyvm", :id, "--vram",               "16"]
+    vb.customize ["modifyvm", :id, "--graphicscontroller", "vboxvga"]
+    vb.customize ["modifyvm", :id, "--accelerate3d",       "off"]
+    vb.customize ["modifyvm", :id, "--usb",                "off"]
+    vb.customize ["modifyvm", :id, "--audio",              "none"]
 
-    # ── Storage ───────────────────────────────────────────
+    # Orden de arranque: DVD primero
+    vb.customize ["modifyvm", :id, "--boot1", "dvd",
+                                   "--boot2", "none",
+                                   "--boot3", "none",
+                                   "--boot4", "none"]
+
+    # Controlador IDE + ISO como DVD
     vb.customize ["storagectl", :id,
                   "--name", "IDE Controller",
-                  "--add", "ide",
+                  "--add",  "ide",
                   "--controller", "PIIX4"]
+
     vb.customize ["storageattach", :id,
                   "--storagectl", "IDE Controller",
-                  "--port", "0", "--device", "0",
-                  "--type", "dvddrive",
+                  "--port",   "0",
+                  "--device", "0",
+                  "--type",   "dvddrive",
                   "--medium", iso_path]
-
-    # ── Boot order ────────────────────────────────────────
-    vb.customize ["modifyvm", :id,
-                  "--boot1", "dvd",
-                  "--boot2", "none",
-                  "--boot3", "none",
-                  "--boot4", "none"]
-
-    # ── Misc optimisations ────────────────────────────────
-    vb.customize ["modifyvm", :id, "--usb",   "off"]
-    vb.customize ["modifyvm", :id, "--audio", "none"]
-
   end
+
+  # Red host-only para acceder desde el navegador
+  config.vm.network "private_network", ip: VM_IP, auto_config: false
 
   config.vm.post_up_message = <<~MSG
 
-    \e[32m✔ Darkly VM is running!\e[0m
-    Open your browser and navigate to:
+    \e[32m✔ Darkly VM arrancada!\e[0m
+    Abre tu navegador en:
 
         http://#{VM_IP}
 
-    To stop the VM:   vagrant halt
-    To destroy it:    vagrant destroy
+    Parar:   vagrant halt
+    Borrar:  vagrant destroy
 
   MSG
 
