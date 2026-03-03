@@ -15,86 +15,90 @@
 #    vagrant destroy → elimina la VM
 # ─────────────────────────────────────────────────────────────
 
-VM_NAME   = "Darkly_BornToSec"
-DUMMY_BOX = "darkly-dummy"
-VM_IP     = "192.168.56.128"
+VM_NAME  = "Darkly_BornToSec"
+HOST_NET = "vboxnet0"
 
-# ── Detectar la ISO automáticamente ─────────────────────────
+# ── Detectar ISO ─────────────────────────────────────────────
 iso_path = Dir.glob(File.join(__dir__, "*.iso")).first
 abort "\e[31m[ERROR]\e[0m No se encontró ningún .iso en #{__dir__}" unless iso_path
 puts "\e[32m[info]\e[0m ISO detectada: #{iso_path}"
 
-# ── Crear dummy box si no existe ─────────────────────────────
-unless `vagrant box list 2>/dev/null`.include?(DUMMY_BOX)
-  puts "\e[33m[setup]\e[0m Creando dummy box '#{DUMMY_BOX}'..."
-  require "tmpdir"
-  Dir.mktmpdir do |tmp|
-    File.write("#{tmp}/metadata.json", '{"provider":"virtualbox"}')
-    File.write("#{tmp}/Vagrantfile",   'Vagrant.configure("2") { |c| }')
-    Dir.chdir(tmp) { system("tar czf dummy.box metadata.json Vagrantfile") }
-    system("vagrant box add --name #{DUMMY_BOX} #{tmp}/dummy.box --force") ||
-      abort("\e[31m[ERROR]\e[0m No se pudo crear el dummy box.")
+# ── Interceptar vagrant up/halt/destroy con VBoxManage directo
+# Esto evita que Vagrant intente conectar por SSH a la VM
+cmd = ARGV.first
+
+if cmd == "up"
+  # Crear interfaz host-only si no existe
+  unless `VBoxManage list hostonlyifs 2>/dev/null`.include?(HOST_NET)
+    puts "[setup] Creando interfaz host-only..."
+    system("VBoxManage", "hostonlyif", "create")
   end
-  puts "\e[32m[setup]\e[0m Dummy box listo."
+
+  # Si ya está corriendo, no hacer nada
+  if `VBoxManage list runningvms 2>/dev/null`.include?("\"#{VM_NAME}\"")
+    puts "\e[33m[info]\e[0m La VM ya está corriendo."
+  else
+    # Crear VM solo si no existe ya
+    unless `VBoxManage list vms 2>/dev/null`.include?("\"#{VM_NAME}\"")
+      puts "[setup] Creando VM #{VM_NAME}..."
+
+      system("VBoxManage", "createvm",
+             "--name", VM_NAME, "--ostype", "Ubuntu_64", "--register")
+
+      system("VBoxManage", "modifyvm", VM_NAME,
+             "--memory",         "2048",
+             "--cpus",           "2",
+             "--boot1",          "dvd",
+             "--boot2",          "none",
+             "--boot3",          "none",
+             "--boot4",          "none",
+             "--nic1",           "nat",
+             "--nic2",           "hostonly",
+             "--hostonlyadapter2", HOST_NET,
+             "--usb",            "off",
+             "--audio",          "none",
+             "--biosbootmenu",   "disabled",
+             "--graphicscontroller", "vmsvga",
+             "--vram",           "128",
+             "--ioapic",         "off")
+
+      system("VBoxManage", "storagectl", VM_NAME,
+             "--name",       "IDE Controller",
+             "--add",        "ide",
+             "--controller", "PIIX4")
+
+      system("VBoxManage", "storageattach", VM_NAME,
+             "--storagectl", "IDE Controller",
+             "--port",       "0",
+             "--device",     "0",
+             "--type",       "dvddrive",
+             "--medium",     iso_path)
+    end
+
+    puts "[setup] Arrancando VM..."
+    system("VBoxManage", "startvm", VM_NAME, "--type", "gui")
+  end
+
+  puts "\e[32m✔ Darkly VM arrancada!\e[0m"
+  puts "  Mira la IP en la pantalla de la VM y abre el navegador en esa IP."
+  exit 0
 end
 
-# ── Configuración Vagrant ─────────────────────────────────────
+if cmd == "halt"
+  puts "[setup] Apagando VM..."
+  system("VBoxManage", "controlvm", VM_NAME, "acpipowerbutton")
+  exit 0
+end
+
+if cmd == "destroy"
+  puts "[setup] Eliminando VM..."
+  system("VBoxManage", "controlvm", VM_NAME, "poweroff") rescue nil
+  sleep 2
+  system("VBoxManage", "unregistervm", VM_NAME, "--delete")
+  exit 0
+end
+
+# Configuración mínima para que vagrant no falle en otros subcomandos
 Vagrant.configure("2") do |config|
-
-  config.vm.box           = DUMMY_BOX
-  config.vm.communicator  = :none   # sin SSH, es una ISO "live"
-  config.vm.boot_timeout  = -1      # sin timeout de boot
-  config.ssh.insert_key   = false
-
-  config.vm.provider "virtualbox" do |vb|
-    vb.name   = VM_NAME
-    vb.memory = 2048
-    vb.cpus   = 2
-    vb.gui    = true   # abre ventana gráfica automáticamente
-
-    # Sistema operativo y gráficos
-    vb.customize ["modifyvm", :id, "--ostype",             "Debian"]
-    vb.customize ["modifyvm", :id, "--firmware",           "bios"]
-    vb.customize ["modifyvm", :id, "--pae",                "on"]
-    vb.customize ["modifyvm", :id, "--vram",               "16"]
-    vb.customize ["modifyvm", :id, "--graphicscontroller", "vboxvga"]
-    vb.customize ["modifyvm", :id, "--accelerate3d",       "off"]
-    vb.customize ["modifyvm", :id, "--usb",                "off"]
-    vb.customize ["modifyvm", :id, "--audio",              "none"]
-
-    # Orden de arranque: DVD primero
-    vb.customize ["modifyvm", :id, "--boot1", "dvd",
-                                   "--boot2", "none",
-                                   "--boot3", "none",
-                                   "--boot4", "none"]
-
-    # Controlador IDE + ISO como DVD
-    vb.customize ["storagectl", :id,
-                  "--name", "IDE Controller",
-                  "--add",  "ide",
-                  "--controller", "PIIX4"]
-
-    vb.customize ["storageattach", :id,
-                  "--storagectl", "IDE Controller",
-                  "--port",   "0",
-                  "--device", "0",
-                  "--type",   "dvddrive",
-                  "--medium", iso_path]
-  end
-
-  # Red host-only para acceder desde el navegador
-  config.vm.network "private_network", ip: VM_IP, auto_config: false
-
-  config.vm.post_up_message = <<~MSG
-
-    \e[32m✔ Darkly VM arrancada!\e[0m
-    Abre tu navegador en:
-
-        http://#{VM_IP}
-
-    Parar:   vagrant halt
-    Borrar:  vagrant destroy
-
-  MSG
-
+  config.vm.box = "hashicorp/bionic64"
 end

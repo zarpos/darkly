@@ -73,7 +73,9 @@ start_vm() {
     --cpus "$CPUS" \
     --boot1 dvd --boot2 none --boot3 none --boot4 none \
     --usb off \
-    --audio none
+    --audio none \
+    --nic1 nat \
+    --nic2 hostonly --hostonlyadapter2 "$HOST_NET"
 
   # Controlador IDE + ISO como DVD
   VBoxManage storagectl "$VM_NAME" \
@@ -85,7 +87,7 @@ start_vm() {
     --type dvddrive \
     --medium "$ISO_PATH"
 
-  # Red host-only
+  # Red host-only (NIC2) — NIC1 es NAT por defecto
   if ! VBoxManage list hostonlyifs | grep -q "^Name: *${HOST_NET}$"; then
     info "Creando interfaz host-only $HOST_NET..."
     VBoxManage hostonlyif create
@@ -93,9 +95,6 @@ start_vm() {
 
   VBoxManage hostonlyif ipconfig "$HOST_NET" \
     --ip "$HOST_NET_IP" --netmask "$HOST_NET_MASK"
-
-  VBoxManage modifyvm "$VM_NAME" \
-    --nic1 hostonly --hostonlyadapter1 "$HOST_NET"
 
   info "Arrancando VM (se abrirá una ventana)..."
   VBoxManage startvm "$VM_NAME" --type gui
